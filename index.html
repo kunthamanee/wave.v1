@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Wave Shooter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Arial", sans-serif;
+      background: #0d2a4d;
+      color: #f7f1d1;
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      border-radius: 12px;
+      background: #0d2a4d;
+    }
+    h1 {
+      margin: 10px 0;
+    }
+    .hud {
+      margin: 10px;
+      font-size: 18px;
+    }
+    .btn {
+      padding: 10px 16px;
+      margin: 6px;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      background: #1f3c70;
+      color: #f7f1d1;
+    }
+    .correct {
+      background: #8df59a;
+    }
+    .wrong {
+      background: #f77a7a;
+    }
+  </style>
+</head>
+<body>
+  <h1>Wave Shooter</h1>
+  <canvas id="gameCanvas" width="500" height="600"></canvas>
+  <div class="hud">
+    <span>Score: <span id="score">0</span></span> |
+    <span>Lives: <span id="lives">5</span></span> |
+    <span>f = <span id="fDisplay">10</span> Hz</span>
+  </div>
+  <div id="controls"></div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const GUN_X = 60;
+    const GUN_Y = H - 60;
+
+    let score = 0, lives = 5, f = 10;
+    let currentEnemy = null;
+    let answered = false;
+    let totalDefeated = 0;
+    let waves = [];
+
+    const enemyColors = ["#4CAF50", "#2196F3", "#F44336"];
+
+    function newEnemy() {
+      answered = false;
+      const vList = [100, 150, 200, 300];
+      const v = vList[Math.floor(Math.random() * vList.length)];
+      const lambda = v / f;
+      const x = Math.random() * (W - 100) + 100;
+      const y = Math.random() * (H / 2) + 50;
+      const color = enemyColors[Math.floor(Math.random() * enemyColors.length)];
+
+      currentEnemy = { x, y, v, lambda, alive: true, color };
+      makeChoices(lambda);
+    }
+
+    function makeChoices(correct) {
+      const container = document.getElementById("controls");
+      container.innerHTML = "";
+      let choices = [correct];
+      while (choices.length < 3) {
+        let wrong = correct + (Math.floor(Math.random() * 5) - 2) * 5;
+        if (wrong <= 0 || choices.includes(wrong)) continue;
+        choices.push(wrong);
+      }
+      choices.sort(() => Math.random() - 0.5);
+      for (let val of choices) {
+        const btn = document.createElement("button");
+        btn.textContent = "λ = " + val + " m";
+        btn.className = "btn";
+        btn.onclick = () => checkAnswer(val, correct, btn);
+        container.appendChild(btn);
+      }
+    }
+
+    function checkAnswer(val, correct, btn) {
+      if (answered) return;
+      answered = true;
+      if (val === correct) {
+        btn.classList.add("correct");
+        score += 50;
+        totalDefeated++;
+        fireWave();
+        setTimeout(() => {
+          if (totalDefeated % 5 === 0) {
+            const fs = [10, 20, 25, 50];
+            f = fs[(totalDefeated / 5) % fs.length] || 10;
+          }
+        }, 500);
+      } else {
+        btn.classList.add("wrong");
+        score -= 10;
+      }
+      updateHUD();
+    }
+
+    function fireWave() {
+      const dx = currentEnemy.x - GUN_X;
+      const dy = currentEnemy.y - GUN_Y;
+      const angle = Math.atan2(dy, dx);
+      waves.push({
+        x: GUN_X,
+        y: GUN_Y,
+        angle: angle,
+        speed: 4,
+        phase: 0
+      });
+    }
+
+    function updateHUD() {
+      document.getElementById("score").textContent = score;
+      document.getElementById("lives").textContent = lives;
+      document.getElementById("fDisplay").textContent = f;
+    }
+
+    function drawGun() {
+      if (!currentEnemy) return;
+      const dx = currentEnemy.x - GUN_X;
+      const dy = currentEnemy.y - GUN_Y;
+      const angle = Math.atan2(dy, dx);
+
+      // ฐานปืน
+      ctx.fillStyle = "#555";
+      ctx.beginPath();
+      ctx.arc(GUN_X, GUN_Y, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ลำกล้องหมุนได้
+      ctx.save();
+      ctx.translate(GUN_X, GUN_Y);
+      ctx.rotate(angle);
+      ctx.fillStyle = "#777";
+      ctx.fillRect(0, -5, 30, 10);
+      ctx.restore();
+    }
+
+    function drawEnemy() {
+      if (!currentEnemy || !currentEnemy.alive) return;
+      ctx.fillStyle = currentEnemy.color;
+      ctx.beginPath();
+      ctx.arc(currentEnemy.x, currentEnemy.y, 25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ตา
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(currentEnemy.x - 7, currentEnemy.y - 5, 5, 0, Math.PI * 2);
+      ctx.arc(currentEnemy.x + 7, currentEnemy.y - 5, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ปาก
+      ctx.fillStyle = "#222";
+      ctx.fillRect(currentEnemy.x - 10, currentEnemy.y + 10, 20, 4);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "14px Arial";
+      ctx.fillText("v=" + currentEnemy.v + " m/s", currentEnemy.x - 30, currentEnemy.y - 30);
+    }
+
+    function drawWave(w) {
+      ctx.strokeStyle = "#f7f1d1";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      const amp = 10;
+      const freq = 0.3;
+      const len = 60;
+
+      for (let i = 0; i < len; i++) {
+        const px = w.x + i * Math.cos(w.angle);
+        const py = w.y + i * Math.sin(w.angle) + Math.sin((i + w.phase) * freq) * amp;
+
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      w.x += w.speed * Math.cos(w.angle);
+      w.y += w.speed * Math.sin(w.angle);
+      w.phase += 1;
+    }
+
+    function updateWaves() {
+      for (let i = waves.length - 1; i >= 0; i--) {
+        const w = waves[i];
+        drawWave(w);
+
+        if (currentEnemy && currentEnemy.alive &&
+            Math.hypot(w.x - currentEnemy.x, w.y - currentEnemy.y) < 20) {
+          currentEnemy.alive = false;
+          waves.splice(i, 1);
+          setTimeout(() => newEnemy(), 300);
+        } else if (w.x > W
